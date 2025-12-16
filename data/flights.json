@@ -2,6 +2,33 @@
     {
         "flight_id": "FL0001",
         "airline": "IndiGo",
+        "from": "Delhi",
+        "to": "Goa",
+        "departure_time": "2025-01-15T06:00:00",
+        "arrival_time": "2025-01-15T08:30:00",
+        "price": 4500
+    },
+    {
+        "flight_id": "FL0002",
+        "airline": "Air India",
+        "from": "Delhi",
+        "to": "Goa",
+        "departure_time": "2025-01-15T10:00:00",
+        "arrival_time": "2025-01-15T12:45:00",
+        "price": 5200
+    },
+    {
+        "flight_id": "FL0003",
+        "airline": "SpiceJet",
+        "from": "Delhi",
+        "to": "Goa",
+        "departure_time": "2025-01-15T14:30:00",
+        "arrival_time": "2025-01-15T17:00:00",
+        "price": 3800
+    },
+    {
+        "flight_id": "FL0004",
+        "airline": "IndiGo",
         "from": "Hyderabad",
         "to": "Delhi",
         "departure_time": "2025-01-04T11:32:00",
@@ -9,7 +36,7 @@
         "price": 2907
     },
     {
-        "flight_id": "FL0002",
+        "flight_id": "FL0005",
         "airline": "Air India",
         "from": "Delhi",
         "to": "Kolkata",
