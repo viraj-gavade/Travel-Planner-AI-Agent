@@ -9,47 +9,34 @@ import requests
 from datetime import datetime, timedelta
 
 
-@tool
-def weather_lookup_tool(
-    latitude: float = 0.0,
-    longitude: float = 0.0,
-    dates: str = "",
-    days: int = 7
-) -> dict:
+def _fetch_weather(latitude: float, longitude: float, days: int = 7) -> dict:
     """
-    Fetch weather forecast for a location using Open-Meteo API.
+    Internal helper to fetch weather forecast for a location using Open-Meteo API.
     
     Args:
-        latitude: Latitude of the location (REQUIRED, between -90 and 90)
-        longitude: Longitude of the location (REQUIRED, between -180 and 180)
-        dates: Optional comma-separated dates in YYYY-MM-DD format
+        latitude: Latitude of the location (between -90 and 90)
+        longitude: Longitude of the location (between -180 and 180)
         days: Number of days to forecast (default: 7)
     
     Returns:
         Dictionary containing weather forecast data or error message
     """
     try:
-        # Input validation - return clean error message
-        if latitude == 0.0 and longitude == 0.0:
-            return {"error": "latitude and longitude are required. Both cannot be 0."}
-        
         # Validate coordinates
         if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
             return {"error": "Invalid coordinates. Latitude: -90 to 90, Longitude: -180 to 180."}
         
-        # Prepare date range
-        today = datetime.now().date()
-        end_date = today + timedelta(days=days)
+        # Limit days to API maximum (16 days for forecast)
+        days = min(days, 16)
         
-        # Build Open-Meteo API URL
-        url = "https://archive-api.open-meteo.com/v1/archive"
+        # Use the FORECAST API (not archive) for future dates
+        url = "https://api.open-meteo.com/v1/forecast"
         params = {
             "latitude": latitude,
             "longitude": longitude,
-            "start_date": today.isoformat(),
-            "end_date": end_date.isoformat(),
             "daily": "temperature_2m_max,temperature_2m_min,weather_code",
-            "timezone": "auto"
+            "timezone": "auto",
+            "forecast_days": days
         }
         
         # Make API request
@@ -95,10 +82,6 @@ def weather_lookup_tool(
         }
         
         for i, date in enumerate(dates_list):
-            # Skip if dates specified and date not in list
-            if dates and date not in dates:
-                continue
-            
             code = weather_codes[i] if i < len(weather_codes) else 0
             condition = weather_conditions.get(code, "Unknown")
             
@@ -118,10 +101,7 @@ def weather_lookup_tool(
                 "longitude": longitude,
                 "timezone": data.get('timezone', 'UTC')
             },
-            "date_range": {
-                "start": today.isoformat(),
-                "end": end_date.isoformat()
-            }
+            "days_requested": days
         }
     
     except requests.RequestException as e:
@@ -186,4 +166,4 @@ def get_weather_for_city(input: str) -> dict:
         return {"error": f"City '{city}' not available. Choose from: {list(CITY_COORDINATES.keys())}"}
     
     lat, lon = CITY_COORDINATES[city]
-    return weather_lookup_tool(lat, lon, days=days)
+    return _fetch_weather(lat, lon, days=days)

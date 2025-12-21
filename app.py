@@ -85,6 +85,16 @@ def render_sidebar_inputs():
     """Render input controls in sidebar."""
     st.sidebar.header("✈️ Trip Details")
     
+    # Verbose toggle at top
+    st.sidebar.subheader("🔧 Settings")
+    show_verbose = st.sidebar.checkbox(
+        "Show Agent Reasoning (Verbose)",
+        value=True,
+        help="Display the agent's thought process, actions, and observations"
+    )
+    
+    st.sidebar.divider()
+    
     # Trip type
     trip_type = st.sidebar.radio(
         "Trip Type",
@@ -165,7 +175,8 @@ def render_sidebar_inputs():
         "total_budget": total_budget,
         "budget_level": budget_level,
         "flight_preference": flight_preference.lower(),
-        "interests": interests
+        "interests": interests,
+        "show_verbose": show_verbose
     }
 
 
@@ -206,29 +217,97 @@ def build_query(inputs: dict) -> str:
     return query
 
 
-def display_results(result: dict):
+def display_results(result: dict, show_verbose: bool = True):
     """
     Display the trip planning results.
     
     Args:
         result: Agent response dictionary
+        show_verbose: Whether to show agent reasoning steps
     """
     if not result.get('success'):
         st.error(f"❌ Error: {result.get('error', 'Unknown error occurred')}")
         return
     
     response = result.get('response', '')
+    intermediate_steps = result.get('intermediate_steps', [])
+    
+    # Display verbose agent reasoning FIRST (if enabled)
+    if show_verbose and intermediate_steps:
+        st.subheader("🧠 Agent Reasoning (Verbose)")
+        
+        for i, step in enumerate(intermediate_steps, 1):
+            # Each step is a tuple: (AgentAction, observation)
+            if isinstance(step, tuple) and len(step) == 2:
+                action, observation = step
+                
+                # Create an expander for each step
+                with st.expander(f"Step {i}: {getattr(action, 'tool', 'Unknown Tool')}", expanded=True):
+                    # Tool called
+                    tool_name = getattr(action, 'tool', 'Unknown')
+                    tool_input = getattr(action, 'tool_input', {})
+                    log = getattr(action, 'log', '')
+                    
+                    # Show Thought (from log)
+                    if log:
+                        st.markdown("**💭 Thought:**")
+                        # Extract thought from log
+                        thought_lines = []
+                        for line in log.split('\n'):
+                            if line.strip() and not line.strip().startswith('Action'):
+                                thought_lines.append(line.strip())
+                        if thought_lines:
+                            st.info('\n'.join(thought_lines))
+                    
+                    # Show Action
+                    st.markdown(f"**🔧 Action:** `{tool_name}`")
+                    
+                    # Show Action Input
+                    st.markdown("**📥 Action Input:**")
+                    if isinstance(tool_input, str):
+                        try:
+                            parsed_input = json.loads(tool_input)
+                            st.json(parsed_input)
+                        except:
+                            st.code(tool_input)
+                    else:
+                        st.json(tool_input)
+                    
+                    # Show Observation
+                    st.markdown("**👁️ Observation:**")
+                    if isinstance(observation, dict):
+                        # Check for errors
+                        if 'error' in observation:
+                            st.error(observation['error'])
+                        else:
+                            st.json(observation)
+                    else:
+                        st.code(str(observation))
+            else:
+                # Fallback for unexpected format
+                with st.expander(f"Step {i}", expanded=False):
+                    st.json(step if isinstance(step, (dict, list)) else str(step))
+        
+        st.divider()
     
     # Display main response
     st.subheader("✈️ Your Trip Plan")
     st.markdown(response)
     
-    # Display intermediate steps
-    if result.get('intermediate_steps'):
-        with st.expander("📊 Tool Usage Details"):
-            for i, step in enumerate(result['intermediate_steps'], 1):
+    # Display raw intermediate steps (collapsed)
+    if intermediate_steps:
+        with st.expander("📊 Raw Tool Data (JSON)"):
+            for i, step in enumerate(intermediate_steps, 1):
                 st.markdown(f"**Step {i}:**")
-                st.json(step)
+                if isinstance(step, tuple) and len(step) == 2:
+                    action, observation = step
+                    st.json({
+                        "tool": getattr(action, 'tool', 'Unknown'),
+                        "tool_input": getattr(action, 'tool_input', {}),
+                        "observation": observation if isinstance(observation, (dict, list, str)) else str(observation)
+                    })
+                else:
+                    st.json(step if isinstance(step, (dict, list)) else str(step))
 
 
 def render_main_content(inputs: dict):
@@ -262,7 +341,7 @@ def render_main_content(inputs: dict):
     
     if st.session_state.trip_result:
         st.divider()
-        display_results(st.session_state.trip_result)
+        display_results(st.session_state.trip_result, show_verbose=inputs.get('show_verbose', True))
         
         # Export option
         st.divider()

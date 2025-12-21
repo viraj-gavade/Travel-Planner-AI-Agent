@@ -111,12 +111,12 @@ def test_tools():
     print("5️⃣ Testing Budget Estimation Tool...")
     print("-" * 50)
     try:
-        budget_result = budget_estimation_tool(
-            flight_cost=5000,
-            hotel_cost_per_night=3000,
-            number_of_days=4,
-            daily_expenses=1500
-        )
+        budget_result = budget_estimation_tool({
+            "flight_cost": 5000,
+            "hotel_cost_per_night": 3000,
+            "number_of_days": 4,
+            "daily_expenses": 1500
+        })
         print(f"✅ Budget Estimation Result:")
         print(json.dumps(budget_result, indent=2, default=str))
     except Exception as e:

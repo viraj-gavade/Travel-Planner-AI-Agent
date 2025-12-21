@@ -73,10 +73,10 @@ class TravelAgent:
         # Initialize Groq LLM with optimized settings for ReAct
         self.llm = ChatGroq(
             model=model,
-            temperature=0.3,  # Lower temperature for more consistent ReAct format
+            temperature=0.2,  # Lower temperature for more consistent ReAct format
             api_key=api_key,
-            max_tokens=2048,
-            timeout=30.0
+            max_tokens=4096,  # Increased for longer responses
+            timeout=60.0  # Increased timeout
         )
         
         # Setup all available tools
@@ -91,8 +91,9 @@ class TravelAgent:
             tools=self.tools,
             verbose=True,
             handle_parsing_errors=self._handle_parsing_error,  # Custom error handler
-            max_iterations=6,  # Reduced to prevent long loops
-            early_stopping_method="force",  # Stop gracefully if max iterations reached
+            max_iterations=7,  # Enforce short, direct chains (one per tool + final)
+            max_execution_time=60,  # 1 minute timeout for faster response
+            early_stopping_method="generate",  # Generate a response even if stopped
             return_intermediate_steps=True  # For debugging
         )
     
@@ -148,67 +149,52 @@ class TravelAgent:
         from langchain.agents import create_react_agent
         from langchain.prompts import PromptTemplate
         
-        # Create a robust ReAct prompt with strict loop-prevention
-        prompt_template = """Answer the following questions as best you can. You have access to the following tools:
-
+        # Create a streamlined ReAct prompt for efficiency
+        prompt_template = """You are an expert travel planner. Answer the user's question using the available tools.
 {tools}
 
 Tool names: {tool_names}
 
-=== STRICT REACT FORMAT (MUST FOLLOW EXACTLY) ===
+=== REACT FORMAT ===
+Thought: [what you need to do]
+Action: [tool name from {tool_names}]
+Action Input: {{"key": "value"}}
+Observation: [tool result]
+... (repeat as needed, but keep the chain as short as possible)
+Thought: I have enough information
+Final Answer: [complete answer]
 
-Question: the input question you must answer
-Thought: think about what information you need and what tool to use
-Action: the action to take, must be exactly one of [{tool_names}]
-Action Input: a valid JSON object with required parameters
-Observation: the result of the action
-... (this Thought/Action/Observation can repeat, but ONLY with DIFFERENT tools or inputs)
-Thought: I now have all information to answer
-Final Answer: the final answer to the original input question
+=== RULES ===
+1. Call each tool ONCE only. Do NOT retry failed tools or repeat any tool.
+2. If a tool returns "error", skip it and continue with other tools.
+3. Action Input must be valid JSON with double quotes.
+4. After getting flight, hotel, places, weather data - calculate budget and give Final Answer.
+5. Keep the operation chain as short and direct as possible. No unnecessary steps or thoughts.
 
-=== CRITICAL RULES TO PREVENT LOOPS ===
+=== TOOL PARAMETERS ===
+- flight_search_tool: {{"source_city": "X", "destination_city": "Y", "preference": "cheapest"}}
+- hotel_recommendation_tool: {{"city": "X", "budget_level": "medium"}}
+- places_discovery_tool: {{"city": "X", "interests": "beach,temple"}}
+- get_weather_for_city: {{"city": "X", "days": 4}}
+- budget_estimation_tool: {{"flight_cost": 5000, "hotel_cost_per_night": 3000, "number_of_days": 4}}
 
-1. ONE ACTION PER STEP: Only call ONE tool per Thought/Action/Observation cycle.
-2. NO RETRIES ON ERROR: If Observation contains "error", DO NOT call the same tool again.
-   Instead, explain the issue and either try a different approach or provide a partial answer.
-3. NO DUPLICATE CALLS: Never call the same tool with the same inputs twice.
-4. MISSING INFO = ASK USER: If required info is missing, ask the user in Final Answer.
-5. ERROR HANDLING: If a tool returns {{"error": "..."}}, immediately write:
-   Thought: The tool returned an error. I will explain this to the user.
-   Final Answer: [Explain what went wrong and suggest alternatives]
+=== EFFICIENT WORKFLOW FOR TRIP PLANNING ===
+1. Call flight_search_tool → get flight price
+2. Call hotel_recommendation_tool → get hotel price  
+3. Call places_discovery_tool → get attractions
+4. Call get_weather_for_city → get weather
+5. Call budget_estimation_tool → calculate total (use prices from steps 1-2)
+6. Provide Final Answer with complete itinerary
 
-=== REQUIRED PARAMETERS ===
-- flight_search_tool: source_city (REQUIRED), destination_city (REQUIRED), preference (optional)
-- hotel_recommendation_tool: city (REQUIRED), budget_level (optional: low/medium/flexible)
-- places_discovery_tool: city (REQUIRED), interests (optional: comma-separated types)
-- get_weather_for_city: city (REQUIRED), days (optional: 1-14)
-- budget_estimation_tool: flight_cost, hotel_cost_per_night, number_of_days (ALL REQUIRED)
-- quick_budget_calculator: total_budget, number_of_days (REQUIRED), flight_cost (optional)
+=== FINAL ANSWER FORMAT ===
+**Your [X]-Day Trip to [Destination]**
 
-=== JSON FORMAT ===
-Action Input MUST be valid JSON with double quotes:
-CORRECT: {{"source_city": "Delhi", "destination_city": "Goa"}}
-WRONG: {{'source_city': 'Delhi'}} or {{source_city: Delhi}}
-
-=== EXAMPLE WORKFLOW ===
-Question: Find a flight from Delhi to Goa
-Thought: I need to search for flights from Delhi to Goa.
-Action: flight_search_tool
-Action Input: {{"source_city": "Delhi", "destination_city": "Goa", "preference": "cheapest"}}
-Observation: {{"flight": {{"id": "FL001", "price": 4500}}, "reason": "Cheapest option"}}
-Thought: I found a flight. I can now provide the answer.
-Final Answer: I found a flight from Delhi to Goa for ₹4,500...
-
-=== EXAMPLE ERROR HANDLING ===
-Question: Find hotels in Atlantis
-Thought: I need to search for hotels in Atlantis.
-Action: hotel_recommendation_tool
-Action Input: {{"city": "Atlantis", "budget_level": "medium"}}
-Observation: {{"error": "No hotels found in Atlantis. Try a different city."}}
-Thought: The tool returned an error - no hotels in Atlantis. I should inform the user.
-Final Answer: I couldn't find hotels in Atlantis as it's not in our database. Please try cities like Delhi, Mumbai, Goa, or Bangalore.
-
-You are an expert travel consultant. Help users plan trips using the available tools.
+**✈️ Flight:** [Airline] - ₹[Price] - Departs [Time]
+**🏨 Hotel:** [Name] - ₹[Price]/night - [Stars]⭐
+**🌤️ Weather:** [Conditions for each day]
+**📍 Places to Visit:** [List top attractions]
+**📅 Itinerary:** [Day-by-day plan]
+**💰 Total Budget:** ₹[Total]
 
 Begin!
 

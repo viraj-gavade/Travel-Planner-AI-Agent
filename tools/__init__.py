@@ -12,14 +12,13 @@ This package contains all the LangChain tools for the travel planning agent:
 from .flight_tool import flight_search_tool
 from .hotel_tool import hotel_recommendation_tool
 from .places_tool import places_discovery_tool
-from .weather_tool import weather_lookup_tool, get_weather_for_city
+from .weather_tool import get_weather_for_city
 from .budget_tool import budget_estimation_tool, quick_budget_calculator
 
 __all__ = [
     "flight_search_tool",
     "hotel_recommendation_tool",
     "places_discovery_tool",
-    "weather_lookup_tool",
     "get_weather_for_city",
     "budget_estimation_tool",
     "quick_budget_calculator",
